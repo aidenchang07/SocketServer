@@ -6,6 +6,9 @@ import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -18,10 +21,12 @@ import java.lang.ref.WeakReference;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Arrays;
 import java.util.Random;
 
 public class UDPSocketActivity extends AppCompatActivity {
@@ -37,6 +42,7 @@ public class UDPSocketActivity extends AppCompatActivity {
     private String currentIP;
     
     private ServerThread serverThread;
+    private Handler handler;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,6 +52,7 @@ public class UDPSocketActivity extends AppCompatActivity {
     }
 
     private void init() {
+        handler = new Handler(Looper.getMainLooper());
         findView();
         setListener();
         getIp();
@@ -101,13 +108,15 @@ public class UDPSocketActivity extends AppCompatActivity {
 
         @Override
         protected Void doInBackground(Void... voids) {
+            final UDPSocketActivity activity = weakActivity.get();
 
             while (!exit) {
                 try {
                     Log.d(TAG, "接收中...");
                     server.receive(packet);
-                    Log.d(TAG, "接收成功 " + packet.getPort());
-                    showMessage(packet);
+                    Log.d(TAG, "接收成功!");
+                    Log.d(TAG, "接收到資料為: " + new String(packet.getData(), 0, packet.getLength()));
+//                    showMessage(activity, packet);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -139,8 +148,14 @@ public class UDPSocketActivity extends AppCompatActivity {
 
         }
 
-        private void showMessage(DatagramPacket packet) {
-            
+        private void showMessage(final UDPSocketActivity activity, final DatagramPacket packet) {
+            Log.d(TAG, "接收到資料為: " + new String(packet.getData(), 0, packet.getLength()));
+//            final UDPSocketActivity activity = weakActivity.get();
+//            Toast.makeText(activity, "接收到資料為: " + new String(packet.getData(), 0, packet.getLength()), Toast.LENGTH_SHORT).show();
+//            Looper.prepare();
+
+//            Toast.makeText(activity, "接收到資料為: " + new String(packet.getData(), 0, packet.getLength()), Toast.LENGTH_SHORT).show();
+//            Looper.loop();
         }
 
         void cancel() {
@@ -224,6 +239,8 @@ public class UDPSocketActivity extends AppCompatActivity {
             }
         }
     }
+
+
 
     private class SendBtnOnClickListener implements View.OnClickListener {
 
