@@ -37,8 +37,7 @@ import java.util.Random;
  * Created by AidenChang 2019/09/11
  */
 public class TCPSocketActivity extends AppCompatActivity {
-
-    private static final String TAG = "TEST";
+    private static final String TAG = TCPSocketActivity.class.getSimpleName();
     private static final int SERVER_PORT = 9700;
     private String currentIP;
 

@@ -1,14 +1,12 @@
 package com.example.socketserver;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.DialogTitle;
 
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -21,17 +19,14 @@ import java.lang.ref.WeakReference;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.ServerSocket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Arrays;
 import java.util.Random;
 
 public class UDPSocketActivity extends AppCompatActivity {
-
-    private static final String TAG = "TEST";
+    private static final String TAG = UDPSocketActivity.class.getSimpleName();
     private static final int SERVER_PORT = 9700;
 
     private Button sendBtn;
@@ -42,17 +37,12 @@ public class UDPSocketActivity extends AppCompatActivity {
     private String currentIP;
     
     private ServerThread serverThread;
-    private Handler handler;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_udpsocket);
-        init();
-    }
 
-    private void init() {
-        handler = new Handler(Looper.getMainLooper());
         findView();
         setListener();
         getIp();
@@ -93,13 +83,22 @@ public class UDPSocketActivity extends AppCompatActivity {
         private WeakReference<UDPSocketActivity> weakActivity;
         private DatagramSocket server;
         private DatagramPacket packet;
+        private ToastManager toastManager;
 
         ServerThread(UDPSocketActivity activity) {
             // 防止Memory Leaks(記憶體泄漏)
             this.weakActivity = new WeakReference<>(activity);
+            toastManager = new ToastManager(weakActivity.get());
             try {
-                byte[] buffer = new byte[1024];
+                byte[] buffer = new byte[1024]; // 接收只顯示此長度內的內容, 超過此長度就不顯示, 不會crash
+                Log.v(TAG, "ServerThread buffer.length: " + buffer.length);
                 this.server = new DatagramSocket(SERVER_PORT);
+
+                if (server.isClosed()) {
+                    toastManager.showShortToastInThread("Server未正常開啟");
+                }
+                toastManager.showShortToastInThread("Server開啟");
+
                 packet = new DatagramPacket(buffer, buffer.length);
             } catch (SocketException e) {
                 e.printStackTrace();
@@ -108,21 +107,20 @@ public class UDPSocketActivity extends AppCompatActivity {
 
         @Override
         protected Void doInBackground(Void... voids) {
-            final UDPSocketActivity activity = weakActivity.get();
 
             while (!exit) {
                 try {
-                    Log.d(TAG, "接收中...");
+                    Log.d(TAG, "doInBackground 接收中...");
                     server.receive(packet);
-                    Log.d(TAG, "接收成功!");
-                    Log.d(TAG, "接收到資料為: " + new String(packet.getData(), 0, packet.getLength()));
-//                    showMessage(activity, packet);
+                    Log.d(TAG, "doInBackground 接收成功!");
+                    Log.d(TAG, "doInBackground 接收到資料為: " + new String(packet.getData(), 0, packet.getLength()) + " packet.getLength(): " + packet.getLength());
+                    toastManager.showLongToastInThread(new String(packet.getData(), 0, packet.getLength()));
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
 
-            Log.d(TAG, "Server is already closed.");
+            Log.d(TAG, "doInBackground server: " + server + " isClose?: " + server.isClosed());
             return null;
         }
 
@@ -136,26 +134,15 @@ public class UDPSocketActivity extends AppCompatActivity {
                     || activity.isFinishing()
                     || activity.isDestroyed()) {
                 // If the activity is gone, it will end.
+                Log.d(TAG, "ServerThread onPostExecute Activity is gone");
                 return;
             }
 
-            activity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    Toast.makeText(activity, "Server is already closed.", Toast.LENGTH_SHORT).show();
-                }
-            });
-
-        }
-
-        private void showMessage(final UDPSocketActivity activity, final DatagramPacket packet) {
-            Log.d(TAG, "接收到資料為: " + new String(packet.getData(), 0, packet.getLength()));
-//            final UDPSocketActivity activity = weakActivity.get();
-//            Toast.makeText(activity, "接收到資料為: " + new String(packet.getData(), 0, packet.getLength()), Toast.LENGTH_SHORT).show();
-//            Looper.prepare();
-
-//            Toast.makeText(activity, "接收到資料為: " + new String(packet.getData(), 0, packet.getLength()), Toast.LENGTH_SHORT).show();
-//            Looper.loop();
+            if (!server.isClosed()) {
+                toastManager.showShortToastInThread("Server未正常關閉");
+                return;
+            }
+            toastManager.showShortToastInThread("Server關閉");
         }
 
         void cancel() {
@@ -171,10 +158,12 @@ public class UDPSocketActivity extends AppCompatActivity {
         private WeakReference<UDPSocketActivity> weakActivity;
         private DatagramSocket clientSocket;
         private InetAddress addressInet;
+        private ToastManager toastManager;
 
         ClientThread(UDPSocketActivity activity) {
             // 防止Memory Leaks(記憶體泄漏)
             this.weakActivity = new WeakReference<>(activity);
+            toastManager = new ToastManager(weakActivity.get());
             try {
                 this.clientSocket = new DatagramSocket(SERVER_PORT);
             } catch (SocketException e) {
@@ -194,7 +183,7 @@ public class UDPSocketActivity extends AppCompatActivity {
                 e.printStackTrace();
             }
 
-            Log.d(TAG, "sendString: " + sendString);
+            Log.d(TAG, "doInBackground sendString: " + sendString + " sendString.getBytes().length: " + sendString.getBytes().length);
             DatagramPacket sendPacket = new DatagramPacket(sendString.getBytes(), sendString.length(), addressInet, SERVER_PORT);
 
             try {
@@ -219,24 +208,14 @@ public class UDPSocketActivity extends AppCompatActivity {
                     || activity.isFinishing()
                     || activity.isDestroyed()) {
                 // If the activity is gone, it will end.
+                Log.d(TAG, "ClientThread onPostExecute Activity is gone");
                 return;
             }
 
-            if (result) {
-                activity.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        Toast.makeText(activity, "傳送成功", Toast.LENGTH_SHORT).show();
-                    }
-                });
-            } else {
-                activity.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        Toast.makeText(activity, "傳送失敗", Toast.LENGTH_SHORT).show();
-                    }
-                });
+            if (!result) {
+                toastManager.showShortToastInThread("傳送失敗");
             }
+            toastManager.showShortToastInThread("傳送成功");
         }
     }
 
@@ -265,13 +244,12 @@ public class UDPSocketActivity extends AppCompatActivity {
             Toast.makeText(UDPSocketActivity.this, "StartServerBtn", Toast.LENGTH_SHORT).show();
 
             if (serverThread == null) {
-                Toast.makeText(UDPSocketActivity.this, "Server開啟", Toast.LENGTH_SHORT).show();
-                Log.d(TAG, "Server開啟");
+                Log.d(TAG, "onClick Server開啟");
                 serverThread = new ServerThread(UDPSocketActivity.this);
                 serverThread.execute();
             } else {
                 Toast.makeText(UDPSocketActivity.this, "Server已開啟了", Toast.LENGTH_SHORT).show();
-                Log.d(TAG, "Server已開啟了");
+                Log.d(TAG, "onClick Server已開啟了");
             }
         }
     }
@@ -280,13 +258,12 @@ public class UDPSocketActivity extends AppCompatActivity {
         @Override
         public void onClick(View view) {
             if (serverThread != null) {
-                Toast.makeText(UDPSocketActivity.this, "Server關閉", Toast.LENGTH_SHORT).show();
-                Log.d(TAG, "Server關閉");
+                Log.d(TAG, "OnClick Server關閉");
                 serverThread.cancel();
                 serverThread = null;
             } else {
                 Toast.makeText(UDPSocketActivity.this, "Server均已關閉", Toast.LENGTH_SHORT).show();
-                Log.d(TAG, "Server均已關閉");
+                Log.d(TAG, "OnClick Server均已關閉");
             }
         }
     }
